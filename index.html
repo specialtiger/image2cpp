@@ -346,6 +346,7 @@
 						<div class="table-cell"><label>Draw mode:</label></div>
 						<div class="table-cell">
 							<select id="drawMode" name="drawMode" onchange="updateDrawMode(this)">
+								<option value="horizontal1bit_flip">Horizontal Flip- 1 bit per pixel</option>
 								<option value="horizontal1bit">Horizontal - 1 bit per pixel</option>
 								<option value="vertical1bit">Vertical - 1 bit per pixel</option>
 								<option value="horizontal565">Horizontal - 2 bytes per pixel (565)</option>
@@ -372,7 +373,60 @@
 
 
 	<script type="text/javascript">	
+		function flipByte(c){
+		var r=0;
+		for(var i = 0; i < 8; i++){
+			r <<= 1;
+			r |= c & 1;
+			c >>= 1;
+		}
+		return r;
+		}
 		var ConversionFunctions = {
+			// Output the image as a string for horizontally drawing displays
+			horizontal1bit_flip: function (data, canvasWidth, canvasHeight){
+				var output_string = "";
+				var output_index = 0;
+
+				var byteIndex = 7;
+				var number = 0;
+
+				// format is RGBA, so move 4 steps per pixel
+				for(var index = 0; index < data.length; index += 4){
+					// Get the average of the RGB (we ignore A)
+					var avg = (data[index] + data[index + 1] + data[index + 2]) / 3;
+					if(avg > settings["threshold"]){
+						number += Math.pow(2, byteIndex);
+					}
+					byteIndex--;
+
+					// if this was the last pixel of a row or the last pixel of the
+					// image, fill up the rest of our byte with zeros so it always contains 8 bits
+					if ((index != 0 && (((index/4)+1)%(canvasWidth)) == 0 ) || (index == data.length-4)) {
+						// for(var i=byteIndex;i>-1;i--){
+							// number += Math.pow(2, i);
+						// }
+						byteIndex = -1;
+					}
+
+					// When we have the complete 8 bits, combine them into a hex value
+					if(byteIndex < 0){
+						number = flipByte(number)
+						var byteSet = number.toString(16);
+						if(byteSet.length == 1){ byteSet = "0"+byteSet; }
+						var b = "0x"+byteSet;
+						output_string += b + ", ";
+						output_index++;
+						if(output_index >= 16){
+							output_string += "\n";
+							output_index = 0;
+						}
+						number = 0;
+						byteIndex = 7;
+					}
+				}
+				return output_string;
+			},
 			// Output the image as a string for horizontally drawing displays
 			horizontal1bit: function (data, canvasWidth, canvasHeight){
 				var output_string = "";
@@ -589,7 +643,7 @@
 			threshold: 128,
 			outputFormat: "plain",
 			invertColors: false,
-			conversionFunction: ConversionFunctions.horizontal1bit
+			conversionFunction: ConversionFunctions.horizontal1bit_flip
 		};
 
 		// Variable name, when "arduino code" is required
@@ -643,7 +697,7 @@
 
 		function updateDrawMode(elm) {
 			var note = document.getElementById("note1bit");
-			if(elm.value == "horizontal1bit" || elm.value == "vertical1bit") {
+			if(elm.value == "horizontal1bit" || elm.value == "vertical1bit" || elm.value == "horizontal1bit_flip") {
 				note.style.display = "block";
 			} else {
 				note.style.display = "none";
@@ -657,7 +711,7 @@
 
 		function updateDrawMode(elm) {
 			var note = document.getElementById("note1bit");
-			if(elm.value == "horizontal1bit" || elm.value == "vertical1bit") {
+			if(elm.value == "horizontal1bit" || elm.value == "vertical1bit"|| elm.value == "horizontal1bit_flip") {
 				note.style.display = "block";
 			} else {
 				note.style.display = "none";
@@ -762,7 +816,8 @@
 			}
 			// Make sure the image is black and white
 			if(settings.conversionFunction == ConversionFunctions.horizontal1bit
-				|| settings.conversionFunction == ConversionFunctions.vertical1bit) {
+				|| settings.conversionFunction == ConversionFunctions.vertical1bit
+				|| settings.conversionFunction == ConversionFunctions.horizontal1bit_flip) {
 				blackAndWhite(canvas, ctx);
 				if(settings["invertColors"]){
 					invert(canvas, ctx);
@@ -806,6 +861,7 @@
 			input = input.replace(/0x/g, "");
 			// Split into list
 			var list = input.split(",");
+			
 			console.log(list);
 
 			if(drawMode == "horizontal"){
